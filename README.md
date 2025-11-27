@@ -34,3 +34,8 @@ How to run:
 Notes:
 - The OpenAI adapter is a stub showing how to adapt vendor SDKs; it is not functional.
 - The MockAdapter provides deterministic responses and is used in tests.
+
+<img width="821" height="1128" alt="image" src="https://github.com/user-attachments/assets/b1ebd47f-07bb-4448-9959-730067a1f2ea" />
+
+
+
