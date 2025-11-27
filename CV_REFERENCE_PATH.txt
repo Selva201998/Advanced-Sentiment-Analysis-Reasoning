@@ -1,0 +1,2 @@
+The user's CV is located at: /mnt/data/Selva_Ganapathy_Elangovan.pdf
+Include this path if you want to attach the original PDF in submissions.

@@ -1,0 +1,1 @@
+This is a lightweight demo project to practice deterministic pipeline design. See README.md for details.
