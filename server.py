@@ -14,41 +14,55 @@ load_dotenv()
 
 app = FastAPI()
 
-# Initialize pipeline components
-# We do this globally so we don't reload for every request
-if not os.environ.get("OPENAI_API_KEY"):
-    print("WARNING: OPENAI_API_KEY not found. Web UI might fail.")
+# Global placeholder
+controller = None
 
-try:
-    adapter = OpenAIAdapter()
-    
-    # Choose embedding index based on API key availability
-    if os.environ.get("OPENAI_API_KEY"):
-        print("Using OpenAI Embeddings")
-        idx = OpenAIIndex()
-    else:
-        print("Using Simple MD5 Embeddings")
-        idx = SimpleVectorIndex()
+def get_controller():
+    global controller
+    if controller:
+        return controller
+        
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        print("WARNING: OPENAI_API_KEY not found during initialization.")
+        return None
 
-    idx.add("doc1", "This product is excellent and works as expected.")
-    idx.add("doc2", "The device is not working after a week.")
-    idx.add("doc3", "Customer support was very helpful.")
-    
-    controller = PipelineController(adapter=adapter, vector_index=idx)
-except Exception as e:
-    print(f"Error initializing pipeline: {e}")
-    controller = None
+    try:
+        print("Initializing pipeline...")
+        adapter = OpenAIAdapter()
+        
+        if api_key:
+            print("Using OpenAI Embeddings")
+            idx = OpenAIIndex()
+        else:
+            # This branch might not be reachable due to check above, but keeping logic
+            print("Using Simple MD5 Embeddings")
+            idx = SimpleVectorIndex()
+
+        idx.add("doc1", "This product is excellent and works as expected.")
+        idx.add("doc2", "The device is not working after a week.")
+        idx.add("doc3", "Customer support was very helpful.")
+        
+        controller = PipelineController(adapter=adapter, vector_index=idx)
+        return controller
+    except Exception as e:
+        print(f"Error initializing pipeline: {e}")
+        return None
 
 class AnalyzeRequest(BaseModel):
     text: str
 
 @app.post("/api/analyze")
 async def analyze_text(request: AnalyzeRequest):
-    if not controller:
-        raise HTTPException(status_code=500, detail="Pipeline not initialized (check API Key)")
+    ctrl = get_controller()
+    if not ctrl:
+        # Check specifically for the key to give a better error message
+        if not os.environ.get("OPENAI_API_KEY"):
+            raise HTTPException(status_code=500, detail="Pipeline not initialized: OPENAI_API_KEY is missing on the server.")
+        raise HTTPException(status_code=500, detail="Pipeline initialization failed. Check server logs.")
     
     try:
-        result = controller.run(request.text)
+        result = ctrl.run(request.text)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
