@@ -14,31 +14,53 @@ load_dotenv()
 
 app = FastAPI()
 
-# Global placeholder
+# Global state
 controller = None
+init_error = None
+init_warning = None
 
 def get_controller():
-    global controller
+    global controller, init_error, init_warning
     if controller:
         return controller
         
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         print("WARNING: OPENAI_API_KEY not found during initialization.")
-        return None
+        # We don't return None here immediately, we let it try to initialize 
+        # (maybe with simple index) or fail in the try block if adapter needs key.
 
     try:
         print("Initializing pipeline...")
-        adapter = OpenAIAdapter()
-        
+        # Adapter might fail if no key, but let's try
+        try:
+            adapter = OpenAIAdapter()
+        except Exception as e:
+            if not api_key:
+                 # Expected if no key
+                 raise ValueError("OpenAI API Key missing")
+            raise e
+
+        # Try to use OpenAI Index first
+        idx = None
         if api_key:
-            print("Using OpenAI Embeddings")
-            idx = OpenAIIndex()
-        else:
-            # This branch might not be reachable due to check above, but keeping logic
+            try:
+                print("Attempting to use OpenAI Embeddings...")
+                idx = OpenAIIndex()
+                # Test connection with one add
+                idx.add("test_connection", "test")
+                # If successful, clear and use for real docs
+                idx.data = [] 
+            except Exception as e:
+                print(f"OpenAI Embeddings failed: {e}. Falling back to Simple Index.")
+                init_warning = f"OpenAI Embeddings failed ({str(e)}). Using Simple Index."
+                idx = SimpleVectorIndex()
+        
+        if idx is None:
             print("Using Simple MD5 Embeddings")
             idx = SimpleVectorIndex()
 
+        # Add documents (safe for either index)
         idx.add("doc1", "This product is excellent and works as expected.")
         idx.add("doc2", "The device is not working after a week.")
         idx.add("doc3", "Customer support was very helpful.")
@@ -48,13 +70,8 @@ def get_controller():
 
     except Exception as e:
         print(f"Error initializing pipeline: {e}")
-        # Store the error to return it
-        global init_error
         init_error = str(e)
         return None
-
-# Global error storage
-init_error = None
 
 class AnalyzeRequest(BaseModel):
     text: str
@@ -66,7 +83,6 @@ async def analyze_text(request: AnalyzeRequest):
         if not os.environ.get("OPENAI_API_KEY"):
             raise HTTPException(status_code=500, detail="Pipeline not initialized: OPENAI_API_KEY is missing on the server.")
         
-        # Return the actual error
         detail_msg = f"Pipeline initialization failed: {init_error}" if init_error else "Pipeline initialization failed. Check server logs."
         raise HTTPException(status_code=500, detail=detail_msg)
     
@@ -87,7 +103,9 @@ async def get_status():
         "status": "online",
         "pipeline_initialized": controller is not None,
         "api_key_configured": bool(key),
-        "api_key_length": len(key) if key else 0
+        "api_key_length": len(key) if key else 0,
+        "init_warning": init_warning,
+        "init_error": init_error
     }
 
 if __name__ == "__main__":
