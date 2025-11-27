@@ -45,9 +45,16 @@ def get_controller():
         
         controller = PipelineController(adapter=adapter, vector_index=idx)
         return controller
+
     except Exception as e:
         print(f"Error initializing pipeline: {e}")
+        # Store the error to return it
+        global init_error
+        init_error = str(e)
         return None
+
+# Global error storage
+init_error = None
 
 class AnalyzeRequest(BaseModel):
     text: str
@@ -56,10 +63,12 @@ class AnalyzeRequest(BaseModel):
 async def analyze_text(request: AnalyzeRequest):
     ctrl = get_controller()
     if not ctrl:
-        # Check specifically for the key to give a better error message
         if not os.environ.get("OPENAI_API_KEY"):
             raise HTTPException(status_code=500, detail="Pipeline not initialized: OPENAI_API_KEY is missing on the server.")
-        raise HTTPException(status_code=500, detail="Pipeline initialization failed. Check server logs.")
+        
+        # Return the actual error
+        detail_msg = f"Pipeline initialization failed: {init_error}" if init_error else "Pipeline initialization failed. Check server logs."
+        raise HTTPException(status_code=500, detail=detail_msg)
     
     try:
         result = ctrl.run(request.text)
