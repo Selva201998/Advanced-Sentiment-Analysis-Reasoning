@@ -57,6 +57,16 @@ async def analyze_text(request: AnalyzeRequest):
 # Mount this LAST to avoid overriding API routes
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
+@app.get("/api/status")
+async def get_status():
+    key = os.environ.get("OPENAI_API_KEY")
+    return {
+        "status": "online",
+        "pipeline_initialized": controller is not None,
+        "api_key_configured": bool(key),
+        "api_key_length": len(key) if key else 0
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
